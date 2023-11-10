@@ -18,8 +18,8 @@ BEGIN {
 /\[/{
     match($0, /\[(.*)\]/, a);
     gsub(/^[\t ]+|[\t ]+$/, "", a[1]);
-    print "   \"testName\": \"" a[1] "\",";
-    print "   \"tests\": [";
+    print "  \"testName\": \"" a[1] "\",";
+    print "  \"tests\": [";
     next;
 }
 
@@ -39,7 +39,7 @@ BEGIN {
     else failed++;
     gsub(/^[\t ]+|[\t ]+$/, "", a[3]);
     gsub(/^[\t ]+|[\t ]+$/, "", a[4]);
-    line = "     {\n       \"name\": \""a[3] "\",\n       \"status\": "status ",\n       \"duration\": \""a[4] "ms\"\n     }";
+    line = "    {\n      \"name\": \""a[3] "\",\n      \"status\": "status ",\n      \"duration\": \""a[4] "ms\"\n    }";
     if (prev_line) print prev_line ",";
     prev_line = line;
 }
@@ -53,15 +53,15 @@ END {
     if (NF > 0) {
         split($0, a, " ");
         last_substring = a[length(a)];
-        print "   ],";
-        print "   \"summary\": {";
-        print "     \"success\": "success",";
-        print "     \"failed\": "failed",";
-        print "     \"rating\": " ((success / (success + failed)) * 100 == int((success / (success + failed)) * 100) ? int((success / (success + failed)) * 100) : sprintf("%.2f", (success / (success + failed)) * 100)) ",";
+        print "  ],";
+        print "  \"summary\": {";
+        print "    \"success\": "success",";
+        print "    \"failed\": "failed",";
+        print "    \"rating\": " ((success / (success + failed)) * 100 == int((success / (success + failed)) * 100) ? int((success / (success + failed)) * 100) : sprintf("%.2f", (success / (success + failed)) * 100)) ",";
         gsub(/[^0-9ms]/, "", a[4]);
-        print "     \"duration\": \""last_substring"\"";
-        print "   }";
-        print "}";
+        print "    \"duration\": \""last_substring"\"";
+        print "  }";
+        print " }";
     }
 }' output.txt > output.json
 echo "Conversion completed. Output written to output.json."
