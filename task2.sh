@@ -1,67 +1,77 @@
 #!/bin/bash
 
+# Проверяем, передан ли аргумент (путь к файлу output.txt)
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <output.txt>"
     exit 1
 fi
 
+# Сохраняем путь к файлу output.txt в переменной
 input_file="$1"
 
-awk '
-BEGIN {
-    print "{";
-    success = 0;
-    failed = 0;
+# Используем Python для обработки и конвертации данных
+python3 - <<END
+import re
+import json
+
+# Читаем содержимое файла output.txt
+with open('$input_file', 'r') as f:
+    lines = f.readlines()
+
+# Инициализируем переменные для хранения результатов
+results = {}
+success = 0
+failed = 0
+
+# Обрабатываем каждую строку файла
+for line in lines:
+    # Если строка содержит символ "[" (начало теста)
+    if '[' in line:
+        # Извлекаем имя теста из квадратных скобок
+        test_name = re.search(r'\[(.*)\]', line).group(1).strip()
+        # Сохраняем имя теста в результирующей структуре
+        results["testName"] = test_name
+        # Инициализируем список тестов
+        results["tests"] = []
+    # Если строка содержит "ok" (результат теста)
+    elif 'ok' in line:
+        # Извлекаем части строки, используя регулярное выражение
+        parts = re.search(r'^([^0-9]*)([0-9]+)(.*),(.*)ms$', line).groups()
+        # Определяем статус теста (успешно/неуспешно)
+        status = False if 'not' in parts[0] else True
+        # Увеличиваем счетчик успешных или неуспешных тестов
+        if status:
+            success += 1
+        else:
+            failed += 1
+        # Создаем структуру данных для теста
+        test = {
+            "name": parts[2].strip(),
+            "status": status,
+            "duration": parts[3].strip() + "ms"
+        }
+        # Добавляем тест в список тестов
+        results["tests"].append(test)
+
+# Рассчитываем рейтинг успешных тестов
+rating = round(success / (success + failed) * 100, 2)
+# Если рейтинг целое число, преобразуем его в int
+if rating == int(rating):
+    rating = int(rating)
+
+# Добавляем общий итог в результирующую структуру
+results["summary"] = {
+    "success": success,
+    "failed": failed,
+    "rating": rating,
+    "duration": lines[-1].split()[-1]
 }
 
-# Извлечение testName
-/\[/{
-    match($0, /\[(.*)\]/, a);
-    gsub(/^[\t ]+|[\t ]+$/, "", a[1]);
-    print "  \"testName\": \"" a[1] "\",";
-    print "  \"tests\": [";
-    next;
-}
+# Записываем результат в файл output.json с отступами в виде табуляции
+with open('output.json', 'w') as f:
+    json.dump(results, f, indent='\t')
 
-# Пропуск строк с ---
-/-----------------------------------------------------------------------------------/ { sub(/,$/, ""); next; }
+# Выводим сообщение об успешном завершении
+print("Conversion completed. Output written to output.json.")
+END
 
-# Обработка строк с результатами тестов
-{
-    # Если строка не содержит "ok", пропустить обработку
-    if ($0 !~ /ok/) {
-        next;
-    }
-
-    match($0, /^([^0-9]*)([0-9]+)(.*),(.*)ms$/, a);
-    status = (a[1] ~ /not/) ? "false" : "true";
-    if (status == "true") success++;
-    else failed++;
-    gsub(/^[\t ]+|[\t ]+$/, "", a[3]);
-    gsub(/^[\t ]+|[\t ]+$/, "", a[4]);
-    line = "    {\n      \"name\": \""a[3] "\",\n      \"status\": "status ",\n      \"duration\": \""a[4] "ms\"\n    }";
-    if (prev_line) print prev_line ",";
-    prev_line = line;
-}
-
-END {
-    if (prev_line) print prev_line;
-}
-
-# Обработка последней строки с общими результатами
-END {
-    if (NF > 0) {
-        split($0, a, " ");
-        last_substring = a[length(a)];
-        print "  ],";
-        print "  \"summary\": {";
-        print "    \"success\": "success",";
-        print "    \"failed\": "failed",";
-        print "    \"rating\": " ((success / (success + failed)) * 100 == int((success / (success + failed)) * 100) ? int((success / (success + failed)) * 100) : sprintf("%.2f", (success / (success + failed)) * 100)) ",";
-        gsub(/[^0-9ms]/, "", a[4]);
-        print "    \"duration\": \""last_substring"\"";
-        print "  }";
-        print " }";
-    }
-}' output.txt > output.json
-echo "Conversion completed. Output written to output.json."
